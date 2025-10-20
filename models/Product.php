@@ -41,6 +41,26 @@ class Product {
 
         return $stmt;
     }
+    
+    // Get products with pagination
+    public function getProducts($from_record_num, $records_per_page) {
+        // Query to select products with pagination
+        $query = "SELECT * FROM " . $this->table_name . " 
+                  ORDER BY created_at DESC
+                  LIMIT ?, ?";
+
+        // Prepare query statement
+        $stmt = $this->conn->prepare($query);
+
+        // Bind variables
+        $stmt->bindParam(1, $from_record_num, PDO::PARAM_INT);
+        $stmt->bindParam(2, $records_per_page, PDO::PARAM_INT);
+
+        // Execute query
+        $stmt->execute();
+
+        return $stmt;
+    }
 
     // Read products by category
     public function readByCategory() {
@@ -251,6 +271,47 @@ class Product {
         }
 
         return false;
+    }
+    
+    // Get all unique categories
+    public function getCategories() {
+        // Query to get all unique categories
+        $query = "SELECT DISTINCT category FROM " . $this->table_name . " ORDER BY category";
+        
+        // Prepare query statement
+        $stmt = $this->conn->prepare($query);
+        
+        // Execute query
+        $stmt->execute();
+        
+        // Create array to store categories
+        $categories = [];
+        
+        // Fetch all categories
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $categories[] = $row['category'];
+        }
+        
+        return $categories;
+    }
+    // Get low stock products
+    public function getLowStockProducts($limit = 5) {
+        // Query to get products with low stock
+        $query = "SELECT * FROM " . $this->table_name . " 
+                WHERE stock <= 10 
+                ORDER BY stock ASC 
+                LIMIT ?";
+        
+        // Prepare query statement
+        $stmt = $this->conn->prepare($query);
+        
+        // Bind limit parameter
+        $stmt->bindParam(1, $limit, PDO::PARAM_INT);
+        
+        // Execute query
+        $stmt->execute();
+        
+        return $stmt;
     }
 }
 ?>

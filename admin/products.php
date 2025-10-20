@@ -17,99 +17,203 @@ if (!Session::isLoggedIn() || !Session::isAdmin()) {
 $database = new Database();
 $db = $database->getConnection();
 
-// Initialize product object
+// Initialize Product object
 $product = new Product($db);
 
-// Process delete action
-if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
-    $product->id = $_GET['id'];
-    
-    if ($product->delete()) {
+// Handle product deletion
+if (isset($_GET['delete']) && !empty($_GET['delete'])) {
+    $id = $_GET['delete'];
+    if ($product->delete($id)) {
         Session::setFlash('success', 'Product deleted successfully.');
     } else {
         Session::setFlash('error', 'Failed to delete product.');
     }
-    
-    // Redirect to avoid resubmission
     header("Location: products.php");
     exit;
 }
 
-// Handle search and filtering
-$search = isset($_GET['search']) ? $_GET['search'] : '';
-$category = isset($_GET['category']) ? $_GET['category'] : '';
+// Handle CSV upload
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_products'])) {
+    if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+        Session::setFlash('error', 'Please select a valid CSV file.');
+        header('Location: products.php');
+        exit;
+    }
 
-// Pagination variables
+    $tmpPath = $_FILES['csv_file']['tmp_name'];
+    $filename = $_FILES['csv_file']['name'];
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    if ($ext !== 'csv') {
+        Session::setFlash('error', 'Only CSV files are allowed.');
+        header('Location: products.php');
+        exit;
+    }
+
+    $handle = fopen($tmpPath, 'r');
+    if ($handle === false) {
+        Session::setFlash('error', 'Failed to read CSV file.');
+        header('Location: products.php');
+        exit;
+    }
+
+    $header = fgetcsv($handle);
+    if ($header === false) {
+        Session::setFlash('error', 'CSV file appears to be empty.');
+        header('Location: products.php');
+        exit;
+    }
+
+    $map = array_flip(array_map('strtolower', $header));
+    $required = ['name','price','category','stock'];
+    foreach ($required as $col) {
+        if (!isset($map[$col])) {
+            fclose($handle);
+            Session::setFlash('error', 'Missing required column: ' . $col);
+            header('Location: products.php');
+            exit;
+        }
+    }
+
+    $imported = 0;
+    $failed = 0;
+
+    while (($row = fgetcsv($handle)) !== false) {
+        if (count($row) === 0) { continue; }
+        if (count($row) === 1 && trim($row[0]) === '') { continue; }
+
+        $name = $row[$map['name']] ?? '';
+        $description = isset($map['description']) ? ($row[$map['description']] ?? '') : '';
+        $price = $row[$map['price']] ?? '';
+        $image = isset($map['image']) ? ($row[$map['image']] ?? '') : '';
+        $categoryVal = $row[$map['category']] ?? '';
+        $stockVal = $row[$map['stock']] ?? '';
+
+        if ($name === '' || $price === '' || $categoryVal === '' || $stockVal === '') { $failed++; continue; }
+
+        $product->name = $name;
+        $product->description = $description;
+        $product->price = is_numeric($price) ? (float)$price : 0;
+        $product->image = $image;
+        $product->category = $categoryVal;
+        $product->stock = is_numeric($stockVal) ? (int)$stockVal : 0;
+
+        if ($product->create()) { $imported++; } else { $failed++; }
+    }
+    fclose($handle);
+
+    if ($imported > 0) {
+        Session::setFlash('success', 'Imported ' . $imported . ' products' . ($failed ? ' (' . $failed . ' failed)' : ''));
+    } else {
+        Session::setFlash('error', 'Import failed. ' . $failed . ' rows could not be imported.');
+    }
+
+    header('Location: products.php');
+    exit;
+}
+
+// Set up pagination
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $records_per_page = 10;
 $from_record_num = ($records_per_page * $page) - $records_per_page;
 
-// Get products
+// Handle search and filtering
+$search = isset($_GET['search']) ? $_GET['search'] : "";
+$category = isset($_GET['category']) ? $_GET['category'] : "";
+
+// Get products based on search/filter
 if (!empty($search)) {
     $stmt = $product->search($search, $from_record_num, $records_per_page);
-    $total_rows = $product->getTotalSearchResults($search);
-} elseif (!empty($category)) {
-    $stmt = $product->readByCategory($category, $from_record_num, $records_per_page);
+    $total_rows = $product->countSearchResults($search);
+} else if (!empty($category)) {
+    $stmt = $product->getProductsByCategory($category, $from_record_num, $records_per_page);
     $total_rows = $product->getTotalProductsByCategory($category);
 } else {
-    $stmt = $product->readAll($from_record_num, $records_per_page);
-    $total_rows = $product->countProducts();
+    $stmt = $product->getProducts($from_record_num, $records_per_page);
+    $total_rows = $product->getTotalProducts();
 }
 
-// Get all categories for filter dropdown
+// Get categories for filter dropdown
 $categories = $product->getCategories();
-
-// Calculate total pages
-$total_pages = ceil($total_rows / $records_per_page);
 
 // Include header
 $page_title = "Manage Products";
-include_once 'includes/header.php';
+include_once __DIR__ . '/includes/header.php';
 ?>
 
 <div class="container-fluid">
     <div class="row">
-        <!-- Sidebar -->
-        <?php include_once 'includes/sidebar.php'; ?>
-        
-        <!-- Main Content -->
+        <?php include_once __DIR__ . '/includes/sidebar.php'; ?>
+
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">Manage Products</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
-                    <a href="add_product.php" class="btn btn-sm btn-primary">
-                        <i class="fas fa-plus"></i> Add New Product
-                    </a>
+                    <div class="btn-group me-2">
+                        <a href="product_form.php" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-plus"></i> Add New Product
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#uploadCsvModal">
+                            <i class="fas fa-upload"></i> Upload CSV
+                        </button>
+                    </div>
                 </div>
             </div>
-            
-            <!-- Search and Filter -->
-            <div class="row mb-4">
-                <div class="col-md-8">
-                    <form action="" method="get" class="d-flex">
-                        <input type="text" name="search" class="form-control me-2" placeholder="Search products..." value="<?php echo htmlspecialchars($search); ?>">
-                        <button type="submit" class="btn btn-outline-primary">Search</button>
+
+            <!-- Upload CSV Modal -->
+            <div class="modal fade" id="uploadCsvModal" tabindex="-1" aria-labelledby="uploadCsvLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="upload_products" value="1" />
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="uploadCsvLabel">Upload Products (CSV)</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="csv_file" class="form-label">CSV File</label>
+                                    <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required />
+                                </div>
+                                <div class="small text-muted">
+                                    Columns: <code>name, description, price, category, stock, image</code>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Upload</button>
+                            </div>
+                        </div>
                     </form>
                 </div>
-                <div class="col-md-4">
-                    <form action="" method="get" class="d-flex">
-                        <select name="category" class="form-select me-2" onchange="this.form.submit()">
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <form action="" method="GET" class="d-flex">
+                        <input type="text" name="search" class="form-control me-2" placeholder="Search products..." value="<?php echo htmlspecialchars($search); ?>">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </form>
+                </div>
+                <div class="col-md-6">
+                    <form action="" method="GET" class="d-flex">
+                        <select name="category" class="form-select me-2">
                             <option value="">All Categories</option>
                             <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo $cat; ?>" <?php echo ($category == $cat) ? 'selected' : ''; ?>>
-                                <?php echo $cat; ?>
-                            </option>
+                                <option value="<?php echo $cat; ?>" <?php echo ($category == $cat) ? 'selected' : ''; ?>>
+                                    <?php echo $cat; ?>
+                                </option>
                             <?php endforeach; ?>
                         </select>
-                        <button type="submit" class="btn btn-outline-secondary">Filter</button>
+                        <button type="submit" class="btn btn-secondary">Filter</button>
                     </form>
                 </div>
             </div>
-            
+
             <!-- Products Table -->
             <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="table-dark">
+                <table class="table table-striped table-sm">
+                    <thead>
                         <tr>
                             <th>ID</th>
                             <th>Image</th>
@@ -121,85 +225,73 @@ include_once 'includes/header.php';
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)): ?>
-                        <tr>
-                            <td><?php echo $row['id']; ?></td>
-                            <td>
-                                <img src="../assets/images/<?php echo $row['image']; ?>" alt="<?php echo $row['name']; ?>" class="img-thumbnail" style="width: 50px;">
-                            </td>
-                            <td><?php echo $row['name']; ?></td>
-                            <td><?php echo $row['category']; ?></td>
-                            <td>$<?php echo number_format($row['price'], 2); ?></td>
-                            <td>
-                                <?php if ($row['stock'] <= 5): ?>
-                                <span class="text-danger"><?php echo $row['stock']; ?></span>
-                                <?php else: ?>
-                                <?php echo $row['stock']; ?>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <a href="edit_product.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="products.php?action=delete&id=<?php echo $row['id']; ?>" class="btn btn-sm btn-danger delete-btn" data-name="<?php echo $row['name']; ?>">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        <?php endwhile; ?>
-                        
-                        <?php if ($stmt->rowCount() == 0): ?>
-                        <tr>
-                            <td colspan="7" class="text-center">No products found.</td>
-                        </tr>
+                        <?php if ($stmt->rowCount() > 0): ?>
+                            <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)): ?>
+                                <tr>
+                                    <td><?php echo $row['id']; ?></td>
+                                    <td>
+                                        <?php if (!empty($row['image'])): ?>
+                                            <img src="../assets/images/products/<?php echo $row['image']; ?>" alt="<?php echo $row['name']; ?>" width="50">
+                                        <?php else: ?>
+                                            <img src="../assets/images/no-image.jpg" alt="No Image" width="50">
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo $row['name']; ?></td>
+                                    <td><?php echo $row['category']; ?></td>
+                                    <td>$<?php echo number_format($row['price'], 2); ?></td>
+                                    <td>
+                                        <span class="badge bg-<?php echo ($row['stock'] <= 10) ? 'danger' : (($row['stock'] <= 20) ? 'warning' : 'success'); ?>">
+                                            <?php echo $row['stock']; ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="product_form.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="products.php?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this product?');">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="7" class="text-center">No products found.</td>
+                            </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
-            
+
             <!-- Pagination -->
-            <?php if ($total_pages > 1): ?>
+            <?php
+            $total_pages = ceil($total_rows / $records_per_page);
+            if ($total_pages > 1):
+            ?>
             <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-center">
                     <?php if ($page > 1): ?>
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($category) ? '&category=' . urlencode($category) : ''; ?>">
-                            First
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($category) ? '&category=' . urlencode($category) : ''; ?>">
-                            &laquo;
-                        </a>
-                    </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1<?php echo (!empty($search)) ? '&search='.$search : ''; echo (!empty($category)) ? '&category='.$category : ''; ?>">First</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?php echo $page-1; echo (!empty($search)) ? '&search='.$search : ''; echo (!empty($category)) ? '&category='.$category : ''; ?>">Previous</a>
+                        </li>
                     <?php endif; ?>
-                    
-                    <?php 
-                    // Determine the range of page numbers to display
-                    $range = 2; // Display 2 pages before and after the current page
-                    $start_page = max(1, $page - $range);
-                    $end_page = min($total_pages, $page + $range);
-                    
-                    for ($i = $start_page; $i <= $end_page; $i++): 
-                    ?>
-                    <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                        <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($category) ? '&category=' . urlencode($category) : ''; ?>">
-                            <?php echo $i; ?>
-                        </a>
-                    </li>
+
+                    <?php for ($i = max(1, $page - 2); $i <= min($page + 2, $total_pages); $i++): ?>
+                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                            <a class="page-link" href="?page=<?php echo $i; echo (!empty($search)) ? '&search='.$search : ''; echo (!empty($category)) ? '&category='.$category : ''; ?>"><?php echo $i; ?></a>
+                        </li>
                     <?php endfor; ?>
-                    
+
                     <?php if ($page < $total_pages): ?>
-                    <li class="page-item">
-                        <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($category) ? '&category=' . urlencode($category) : ''; ?>">
-                            &raquo;
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page=<?php echo $total_pages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($category) ? '&category=' . urlencode($category) : ''; ?>">
-                            Last
-                        </a>
-                    </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?php echo $page+1; echo (!empty($search)) ? '&search='.$search : ''; echo (!empty($category)) ? '&category='.$category : ''; ?>">Next</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?php echo $total_pages; echo (!empty($search)) ? '&search='.$search : ''; echo (!empty($category)) ? '&category='.$category : ''; ?>">Last</a>
+                        </li>
                     <?php endif; ?>
                 </ul>
             </nav>
@@ -208,46 +300,4 @@ include_once 'includes/header.php';
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                Are you sure you want to delete this product? This action cannot be undone.
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <a href="#" class="btn btn-danger" id="confirmDelete">Delete</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    // Handle delete confirmation
-    document.addEventListener('DOMContentLoaded', function() {
-        const deleteButtons = document.querySelectorAll('.delete-btn');
-        const confirmDeleteBtn = document.getElementById('confirmDelete');
-        
-        deleteButtons.forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const productName = this.getAttribute('data-name');
-                const deleteUrl = this.getAttribute('href');
-                
-                document.querySelector('#deleteModal .modal-body').innerHTML = 
-                    `Are you sure you want to delete <strong>${productName}</strong>? This action cannot be undone.`;
-                confirmDeleteBtn.setAttribute('href', deleteUrl);
-                
-                const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-                deleteModal.show();
-            });
-        });
-    });
-</script>
-
-<?php include_once 'includes/footer.php'; ?>
+<?php include_once __DIR__ . '/includes/footer.php'; ?>

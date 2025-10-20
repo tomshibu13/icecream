@@ -102,11 +102,11 @@ require_once 'includes/header.php';
                 <?php foreach ($cart_items as $item): ?>
                 <div class="row cart-item mb-3 pb-3 border-bottom">
                     <div class="col-md-2">
-                        <img src="assets/images/<?php echo $item['image']; ?>" class="img-fluid rounded" alt="<?php echo $item['name']; ?>">
+                        <img src="assets/images/products/<?php echo $item['image']; ?>" class="img-fluid rounded" alt="<?php echo $item['name']; ?>">
                     </div>
                     <div class="col-md-4">
                         <h5><a href="product.php?id=<?php echo $item['product_id']; ?>"><?php echo $item['name']; ?></a></h5>
-                        <p class="text-muted">$<?php echo number_format($item['price'], 2); ?> each</p>
+                        <p class="text-muted">₹<?php echo number_format($item['price'], 2); ?> each</p>
                     </div>
                     <div class="col-md-3">
                         <form action="" method="post">
@@ -145,7 +145,7 @@ require_once 'includes/header.php';
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-3">
                     <span>Subtotal:</span>
-                    <span>$<?php echo number_format($cart_total, 2); ?></span>
+                    <span>₹<?php echo number_format($cart_total, 2); ?></span>
                 </div>
                 <div class="d-flex justify-content-between mb-3">
                     <span>Shipping:</span>
@@ -154,7 +154,7 @@ require_once 'includes/header.php';
                 <hr>
                 <div class="d-flex justify-content-between mb-3 fw-bold">
                     <span>Total:</span>
-                    <span>$<?php echo number_format($cart_total, 2); ?></span>
+                    <span>₹<?php echo number_format($cart_total, 2); ?></span>
                 </div>
                 
                 <div class="d-grid gap-2">

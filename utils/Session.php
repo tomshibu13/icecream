@@ -75,5 +75,10 @@ class Session {
     public static function getUsername() {
         return self::get('username');
     }
+    
+    // Check if flash message exists
+    public static function hasFlash($key) {
+        return isset($_SESSION['flash'][$key]);
+    }
 }
 ?>

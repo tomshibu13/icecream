@@ -56,7 +56,7 @@ require_once 'includes/header.php';
             <tr>
                 <td>#<?php echo $order['id']; ?></td>
                 <td><?php echo date('F j, Y, g:i a', strtotime($order['created_at'])); ?></td>
-                <td>$<?php echo number_format($order['total_amount'], 2); ?></td>
+                <td>₹<?php echo number_format($order['total_amount'], 2); ?></td>
                 <td>
                     <?php if ($order['status'] == 'Pending'): ?>
                     <span class="badge bg-warning text-dark">Pending</span>
@@ -71,7 +71,7 @@ require_once 'includes/header.php';
                     <?php endif; ?>
                 </td>
                 <td>
-                    <a href="order_confirmation.php?id=<?php echo $order['id']; ?>" class="btn btn-sm btn-primary">
+                    <a href="order_confirmation.php?id=<?php echo htmlspecialchars($order['id']); ?>" class="btn btn-sm btn-primary">
                         <i class="fas fa-eye"></i> View
                     </a>
                 </td>

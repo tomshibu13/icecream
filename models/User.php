@@ -333,5 +333,102 @@ class User {
 
         return false;
     }
+    
+    // Get paginated users (admin)
+    public function getUsers($from_record_num = 0, $records_per_page = 10) {
+        $from_record_num = (int)$from_record_num;
+        $records_per_page = (int)$records_per_page;
+        $query = "SELECT * FROM " . $this->table_name . " ORDER BY created_at DESC LIMIT $from_record_num, $records_per_page";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt;
+    }
+
+    // Search and filter users (admin)
+    public function searchUsers($search = "", $role = "", $status = "", $from_record_num = 0, $records_per_page = 10) {
+        $conditions = [];
+        $params = [];
+
+        if ($search !== "") {
+            $conditions[] = "(username LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)";
+            $like = "%" . $search . "%";
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if ($role !== "") {
+            $conditions[] = "role = ?";
+            $params[] = $role;
+        }
+
+        if ($status !== "") {
+            $conditions[] = "status = ?";
+            $params[] = $status;
+        }
+
+        $where = "";
+        if (!empty($conditions)) {
+            $where = "WHERE " . implode(" AND ", $conditions);
+        }
+
+        $from_record_num = (int)$from_record_num;
+        $records_per_page = (int)$records_per_page;
+        $query = "SELECT * FROM " . $this->table_name . " " . $where . " ORDER BY created_at DESC LIMIT $from_record_num, $records_per_page";
+
+        $stmt = $this->conn->prepare($query);
+        $i = 1;
+        foreach ($params as $p) {
+            $stmt->bindValue($i, $p);
+            $i++;
+        }
+
+        $stmt->execute();
+        return $stmt;
+    }
+
+    // Count search results (admin)
+    public function countSearchResults($search = "", $role = "", $status = "") {
+        $conditions = [];
+        $params = [];
+
+        if ($search !== "") {
+            $conditions[] = "(username LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)";
+            $like = "%" . $search . "%";
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if ($role !== "") {
+            $conditions[] = "role = ?";
+            $params[] = $role;
+        }
+
+        if ($status !== "") {
+            $conditions[] = "status = ?";
+            $params[] = $status;
+        }
+
+        $where = "";
+        if (!empty($conditions)) {
+            $where = "WHERE " . implode(" AND ", $conditions);
+        }
+
+        $query = "SELECT COUNT(*) AS total FROM " . $this->table_name . " " . $where;
+
+        $stmt = $this->conn->prepare($query);
+        $i = 1;
+        foreach ($params as $p) {
+            $stmt->bindValue($i, $p);
+            $i++;
+        }
+
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)$row['total'];
+    }
 }
 ?>

@@ -49,7 +49,7 @@ if (Session::isLoggedIn()) {
                         </li>
                         <?php if (Session::isAdmin()): ?>
                         <li class="nav-item">
-                            <a class="nav-link <?php echo ($current_page == 'admin.php') ? 'active' : ''; ?>" href="admin/index.php">Admin Dashboard</a>
+                            <a class="nav-link <?php echo ($current_page == 'admin.php') ? 'active' : ''; ?>" href="admin/dashboard.php">Admin Dashboard</a>
                         </li>
                         <?php endif; ?>
                     </ul>

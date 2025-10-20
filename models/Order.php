@@ -37,14 +37,14 @@ class Order {
     
     // Get recent orders with customer info
     public function getRecentOrders($limit = 5) {
-        $query = "SELECT o.*, CONCAT(u.first_name, ' ', u.last_name) as customer_name 
+        $query = "SELECT o.*, o.created_at as order_date, CONCAT(u.first_name, ' ', u.last_name) as customer_name 
                  FROM " . $this->table_name . " o
                  LEFT JOIN users u ON o.user_id = u.id
                  ORDER BY o.created_at DESC
                  LIMIT " . $limit;
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $stmt;
     }
 
     // Create order from cart
@@ -164,7 +164,13 @@ class Order {
     }
 
     // Update order status (admin)
-    public function updateStatus() {
+    public function updateStatus($id = null, $status = null) {
+        if ($id !== null) {
+            $this->id = $id;
+        }
+        if ($status !== null) {
+            $this->status = $status;
+        }
         // Query to update status
         $query = "UPDATE " . $this->table_name . "
                 SET
@@ -191,20 +197,133 @@ class Order {
     }
 
     // Get all orders (admin)
-    public function getAllOrders() {
+    public function getAllOrders($from_record_num = 0, $records_per_page = 10) {
         // Query to get all orders with user info
-        $query = "SELECT o.*, u.username, u.full_name 
+        $query = "SELECT o.*, CONCAT(u.first_name, ' ', u.last_name) AS customer_name, u.username 
                 FROM " . $this->table_name . " o
                 LEFT JOIN users u ON o.user_id = u.id
-                ORDER BY o.created_at DESC";
+                ORDER BY o.created_at DESC
+                LIMIT ?, ?";
 
         // Prepare query statement
         $stmt = $this->conn->prepare($query);
+
+        // Bind pagination params
+        $stmt->bindParam(1, $from_record_num, PDO::PARAM_INT);
+        $stmt->bindParam(2, $records_per_page, PDO::PARAM_INT);
 
         // Execute query
         $stmt->execute();
 
         return $stmt;
+    }
+
+    // Search and filter orders (admin)
+    public function searchOrders($search = "", $status = "", $date_from = "", $date_to = "", $from_record_num = 0, $records_per_page = 10) {
+        $conditions = [];
+        $params = [];
+
+        if ($search !== "") {
+            $conditions[] = "(CAST(o.id AS CHAR) LIKE ? OR u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
+            $like = "%" . $search . "%";
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if ($status !== "") {
+            $conditions[] = "o.status = ?";
+            $params[] = $status;
+        }
+
+        if ($date_from !== "") {
+            $conditions[] = "o.created_at >= ?";
+            $params[] = $date_from;
+        }
+
+        if ($date_to !== "") {
+            $conditions[] = "o.created_at <= ?";
+            $params[] = $date_to;
+        }
+
+        $where = "";
+        if (!empty($conditions)) {
+            $where = "WHERE " . implode(" AND ", $conditions);
+        }
+
+        $query = "SELECT o.*, CONCAT(u.first_name, ' ', u.last_name) AS customer_name, u.username
+                FROM " . $this->table_name . " o
+                LEFT JOIN users u ON o.user_id = u.id
+                " . $where . "
+                ORDER BY o.created_at DESC
+                LIMIT ?, ?";
+
+        $stmt = $this->conn->prepare($query);
+
+        $i = 1;
+        foreach ($params as $p) {
+            $stmt->bindValue($i, $p);
+            $i++;
+        }
+        $stmt->bindValue($i, (int)$from_record_num, PDO::PARAM_INT);
+        $i++;
+        $stmt->bindValue($i, (int)$records_per_page, PDO::PARAM_INT);
+
+        $stmt->execute();
+        return $stmt;
+    }
+
+    // Count search results (admin)
+    public function countSearchResults($search = "", $status = "", $date_from = "", $date_to = "") {
+        $conditions = [];
+        $params = [];
+
+        if ($search !== "") {
+            $conditions[] = "(CAST(o.id AS CHAR) LIKE ? OR u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
+            $like = "%" . $search . "%";
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if ($status !== "") {
+            $conditions[] = "o.status = ?";
+            $params[] = $status;
+        }
+
+        if ($date_from !== "") {
+            $conditions[] = "o.created_at >= ?";
+            $params[] = $date_from;
+        }
+
+        if ($date_to !== "") {
+            $conditions[] = "o.created_at <= ?";
+            $params[] = $date_to;
+        }
+
+        $where = "";
+        if (!empty($conditions)) {
+            $where = "WHERE " . implode(" AND ", $conditions);
+        }
+
+        $query = "SELECT COUNT(*) AS total
+                FROM " . $this->table_name . " o
+                LEFT JOIN users u ON o.user_id = u.id
+                " . $where;
+
+        $stmt = $this->conn->prepare($query);
+
+        $i = 1;
+        foreach ($params as $p) {
+            $stmt->bindValue($i, $p);
+            $i++;
+        }
+
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)$row['total'];
     }
 
     // Get order count by status (admin)

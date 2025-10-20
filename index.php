@@ -23,8 +23,8 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 }
 ?>
 
-<!-- Hero Section -->
-<section class="hero text-center">
+<!-- Hero Section --><section class="hero text-center" style="background-image: url('bg.jpg'); background-size: cover; background-position: center;">
+
     <div class="container">
         <h1>Delicious Ice Cream</h1>
         <p class="lead">Handcrafted with premium ingredients for the perfect treat</p>
@@ -40,12 +40,12 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             <?php foreach ($products as $product): ?>
             <div class="col-md-3 col-sm-6 mb-4">
                 <div class="card product-card">
-                    <img src="assets/images/<?php echo $product['image']; ?>" class="card-img-top" alt="<?php echo $product['name']; ?>">
+                    <img src="assets/images/products/<?php echo $product['image']; ?>" class="card-img-top" alt="<?php echo $product['name']; ?>">
                     <div class="card-body">
                         <h5 class="card-title"><?php echo $product['name']; ?></h5>
                         <p class="card-text"><?php echo substr($product['description'], 0, 60); ?>...</p>
                         <div class="d-flex justify-content-between align-items-center">
-                            <span class="price">$<?php echo number_format($product['price'], 2); ?></span>
+                            <span class="price">₹<?php echo number_format($product['price'], 2); ?></span>
                             <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-sm btn-outline-primary">View Details</a>
                         </div>
                     </div>

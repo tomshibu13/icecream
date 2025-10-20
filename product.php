@@ -58,7 +58,7 @@ if (isset($_POST['add_to_cart']) && Session::isLoggedIn()) {
 <div class="row">
     <!-- Product Image -->
     <div class="col-md-5 mb-4">
-        <img src="assets/images/<?php echo $product->image; ?>" class="img-fluid rounded" alt="<?php echo $product->name; ?>">
+        <img src="assets/images/products/<?php echo $product->image; ?>" class="img-fluid rounded" alt="<?php echo $product->name; ?>">
     </div>
     
     <!-- Product Details -->
@@ -69,7 +69,7 @@ if (isset($_POST['add_to_cart']) && Session::isLoggedIn()) {
         <p class="text-muted">Category: <?php echo $product->category; ?></p>
         
         <div class="mb-3">
-            <h3 class="text-danger">$<?php echo number_format($product->price, 2); ?></h3>
+            <h3 class="text-danger">₹<?php echo number_format($product->price, 2); ?></h3>
         </div>
         
         <div class="mb-4">
